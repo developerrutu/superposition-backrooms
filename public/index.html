@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>SUPERPOSITION BACKROOMS</title>
+  <link rel="stylesheet" href="/style.css">
+
+  <!-- Load Three.js from a pinned CDN. Importmap lets us write
+       "import * as THREE from 'three'" in our module script. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/[email protected]/build/three.module.js"
+    }
+  }
+  </script>
+</head>
+<body>
+
+  <!-- ============ GAME SHELL ============ -->
+
+  <!-- The 3D canvas. Everything renders here. -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- ============ BINARY-RAIN LOADING SCREEN ============ -->
+  <!-- Real DOM elements scrolling over the canvas, per the spec
+       ("you are using actual HTML/CSS elements, not faking it"). -->
+  <div id="loader" class="screen visible">
+    <div id="binary-rain"></div>
+    <div class="loader-inner">
+      <div class="boot-line" id="boot-1">INIT QUANTUM LATTICE............ OK</div>
+      <div class="boot-line" id="boot-2">OBSERVER EFFECT MODULE.......... READY</div>
+      <div class="boot-line" id="boot-3">PROBABILITY DEMON HANDSHAKE..... ONLINE</div>
+      <div class="boot-line" id="boot-4">SOUND RENDERER.................. ACTIVE</div>
+      <div class="boot-line" id="boot-5">SIMULATION BOUNDARY............. FRAGILE</div>
+      <div class="boot-title">SUPERPOSITION BACKROOMS</div>
+      <div class="boot-subtitle">// a packet trying to escape its own observation //</div>
+      <button id="init-btn" class="init-btn" type="button">
+        INITIALIZE SIMULATION
+      </button>
+      <div class="boot-warn">▶ Audio is critical. Tap above BEFORE headphones or speakers are required.</div>
+    </div>
+  </div>
+
+  <!-- ============ IN-GAME HUD ============ -->
+  <div id="hud" class="hidden">
+
+    <!-- Top-left: stability / sanity / level readouts -->
+    <div class="hud-panel hud-tl">
+      <div class="hud-row">
+        <span class="hud-label">LEVEL</span>
+        <span class="hud-value" id="level-readout">0</span>
+      </div>
+      <div class="hud-row">
+        <span class="hud-label">QUANTUM STABILITY</span>
+        <div class="bar-outer"><div class="bar-inner" id="stability-bar"></div></div>
+      </div>
+      <div class="hud-row">
+        <span class="hud-label">SANITY</span>
+        <div class="bar-outer"><div class="bar-inner sanity" id="sanity-bar"></div></div>
+      </div>
+      <div class="hud-row tiny">
+        <span class="hud-label">SEEN</span>
+        <span class="hud-value" id="seen-readout">FACING: 000°</span>
+      </div>
+    </div>
+
+    <!-- Top-right: radar / observer map -->
+    <div class="hud-panel hud-tr">
+      <div class="radar-wrap">
+        <svg id="radar" viewBox="-100 -100 200 200" xmlns="http://www.w3.org/2000/svg">
+          <!-- background rings -->
+          <circle cx="0" cy="0" r="92" fill="rgba(8,10,14,0.65)" stroke="rgba(120,160,255,0.25)" stroke-width="1"/>
+          <circle cx="0" cy="0" r="65" fill="none" stroke="rgba(120,160,255,0.15)" stroke-width="1" stroke-dasharray="2 4"/>
+          <circle cx="0" cy="0" r="35" fill="none" stroke="rgba(120,160,255,0.15)" stroke-width="1" stroke-dasharray="2 4"/>
+          <!-- the rotating world group, the static-dot stays in the centre -->
+          <g id="radar-world">
+            <g id="radar-walls"></g>
+            <g id="radar-monsters"></g>
+            <g id="radar-exit"></g>
+          </g>
+          <!-- observer dot: stays static, world rotates around it -->
+          <circle id="radar-player-halo" cx="0" cy="0" r="6" fill="rgba(255,255,255,0.15)">
+            <animate attributeName="r" values="5;8;5" dur="1.6s" repeatCount="indefinite"/>
+          </circle>
+          <circle id="radar-player" cx="0" cy="0" r="3.5" fill="#ffffff"/>
+          <!-- a faint wedge to show forward look direction -->
+          <g id="radar-fwd"></g>
+        </svg>
+        <div class="radar-caption">// OBSERVER MAP //</div>
+      </div>
+    </div>
+
+    <!-- Bottom-center: status prompts, sanity heart-rate, etc. -->
+    <div class="hud-panel hud-bc" id="status-panel">
+      <div id="status-text">SCAN COMPLETE. FORWARD ONLY.</div>
+      <div id="subtitle-text" class="subtitle">LISTEN. IF THE HUM GROWS LOUDER, MOVE.</div>
+    </div>
+
+    <!-- ====== MOBILE CONTROLS (hidden on desktop) ====== -->
+    <div id="mobile-controls" class="hidden">
+      <!-- Movement joystick: thumb anchored bottom-left -->
+      <div id="joystick-move" class="joystick">
+        <div class="joystick-bg">
+          <div class="joystick-knob"></div>
+        </div>
+        <div class="joystick-label">MOVE</div>
+      </div>
+      <!-- Look joystick: thumb anchored bottom-right -->
+      <div id="joystick-look" class="joystick">
+        <div class="joystick-bg">
+          <div class="joystick-knob"></div>
+        </div>
+        <div class="joystick-label">LOOK</div>
+      </div>
+      <!-- A single tap on the right half = primary action (advance through doors) -->
+      <div id="tap-zone" class="hidden"></div>
+    </div>
+
+    <!-- ============ FLASH / OVERLAY EFFECTS ============ -->
+    <div id="vignette"></div>
+    <div id="glitch-overlay"></div>
+    <div id="fade-overlay"></div>
+  </div>
+
+  <!-- ============ PAUSE / GAME OVER / WIN MODALS ============ -->
+  <div id="modal" class="hidden">
+    <div class="modal-inner">
+      <div id="modal-title">SIGNAL LOST</div>
+      <div id="modal-body">You were observed out of existence.</div>
+      <button id="modal-btn" class="init-btn" type="button">RESPAWN</button>
+    </div>
+  </div>
+
+  <!-- The game script (ES module). Loads Three from CDN via importmap. -->
+  <script type="module" src="/game.js"></script>
+</body>
+</html>

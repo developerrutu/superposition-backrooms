@@ -1,0 +1,464 @@
+/* ========================================================================
+   SUPERPOSITION BACKROOMS — stylesheet
+   Everything is built out of CSS to give that "scientific instrument" feel.
+   ======================================================================== */
+
+:root {
+  --c-acid:        #fff58a;
+  --c-acid-dim:    #cab97a;
+  --c-blood:       #ff003c;
+  --c-blood-deep:  #6f0014;
+  --c-console:     #7cf6ff;
+  --c-void:        #050608;
+  --c-void-2:      #0a0d12;
+  --c-panel:       rgba(8, 10, 14, 0.62);
+  --c-panel-edge:  rgba(124, 246, 255, 0.28);
+  --c-warning:     #ffae3b;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  background: var(--c-void);
+  color: var(--c-acid);
+  font-family: "Courier New", "Consolas", "Menlo", monospace;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+/* ============================================================ GAME CANVAS */
+
+#game-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+  background: #000;
+  cursor: crosshair;
+}
+
+/* The HUD layer. We don't block pointer events on the wrapper itself — each
+   panel opts in or out via .lock (so the canvas can still grab the cursor). */
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+#hud.lock { pointer-events: auto; }
+
+/* The black vignette + scanner sweep is a real DOM element layered on top
+   of the canvas — it doesn't fake in-engine, it actually invades the screen. */
+#vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.85) 100%),
+    repeating-linear-gradient(
+      to bottom,
+      rgba(255,255,255,0.02) 0px,
+      rgba(255,255,255,0.02) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  mix-blend-mode: multiply;
+  z-index: 6;
+  transition: opacity 0.4s;
+}
+
+/* The glitch overlay clips full-screen, RGB-shifts on demand. */
+#glitch-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 7;
+  opacity: 0;
+  background:
+    linear-gradient(transparent 0%, transparent 100%),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255,0,60,0.06) 0 1px,
+      transparent 1px 4px,
+      rgba(0,255,200,0.05) 4px 5px,
+      transparent 5px 9px
+    );
+}
+#glitch-overlay.fire {
+  animation: glitchFire 0.6s steps(1) forwards;
+}
+@keyframes glitchFire {
+  0%   { opacity: 0.0; filter: hue-rotate(0deg); transform: translate(0,0); }
+  20%  { opacity: 0.9; filter: hue-rotate(-30deg); transform: translate(-2px, 1px); }
+  35%  { opacity: 0.7; filter: hue-rotate(0deg);  transform: translate(3px, -2px); }
+  55%  { opacity: 0.85;filter: hue-rotate(20deg); transform: translate(-1px, 0); }
+  100% { opacity: 0;    filter: hue-rotate(0deg); transform: translate(0,0); }
+}
+
+#fade-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 8;
+  background: #000;
+  opacity: 0;
+  transition: opacity 1s ease;
+}
+#fade-overlay.on { opacity: 1; }
+#fade-overlay.red { background: var(--c-blood-deep); }
+
+/* ============================================================== PANELS */
+
+.hud-panel {
+  position: absolute;
+  background: var(--c-panel);
+  border: 1px solid var(--c-panel-edge);
+  padding: 10px 12px;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  color: var(--c-acid);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  pointer-events: none;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.6) inset,
+    0 0 20px rgba(124,246,255,0.06);
+}
+
+.hud-panel::before {
+  content: "";
+  position: absolute;
+  top: -1px; left: -1px;
+  width: 10px; height: 10px;
+  border-top: 2px solid var(--c-console);
+  border-left: 2px solid var(--c-console);
+}
+.hud-panel::after {
+  content: "";
+  position: absolute;
+  bottom: -1px; right: -1px;
+  width: 10px; height: 10px;
+  border-bottom: 2px solid var(--c-console);
+  border-right: 2px solid var(--c-console);
+}
+
+.hud-tl { top: 14px; left: 14px; width: 230px; }
+.hud-tr { top: 14px; right: 14px; width: 220px; }
+.hud-bc {
+  bottom: 18px; left: 50%; transform: translateX(-50%);
+  text-align: center; min-width: 320px; max-width: 80vw;
+}
+
+.hud-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 7px;
+  gap: 8px;
+}
+.hud-row:last-child { margin-bottom: 0; }
+.hud-row.tiny { font-size: 9px; opacity: 0.65; }
+
+.hud-label { opacity: 0.7; }
+.hud-value { font-weight: bold; }
+
+/* Bars */
+.bar-outer {
+  flex: 1;
+  height: 6px;
+  background: rgba(0,0,0,0.6);
+  border: 1px solid rgba(255,255,255,0.18);
+  overflow: hidden;
+}
+.bar-inner {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #7cf6ff, #ffffff);
+  transition: width 0.25s linear, background 0.25s;
+}
+.bar-inner.sanity {
+  background: linear-gradient(90deg, #ff003c, #ff7e7e);
+}
+.bar-inner.low {
+  animation: flickerBar 0.4s infinite alternate;
+}
+@keyframes flickerBar {
+  from { opacity: 0.4; }
+  to   { opacity: 1; }
+}
+
+#status-text { font-size: 12px; }
+.subtitle    { font-size: 10px; opacity: 0.6; margin-top: 4px; }
+
+/* ================================================================ RADAR */
+
+.radar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.radar-caption {
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  opacity: 0.65;
+}
+#radar {
+  width: 200px;
+  height: 200px;
+}
+
+/* ============================================================ JOYSTICKS */
+
+/* The mobile controls container is only "active" when device is touch.
+   We toggle visibility from JS rather than CSS so we can keep the canvas
+   responsive on hybrid devices (laptops with touchscreens). */
+#mobile-controls {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.joystick {
+  position: absolute;
+  bottom: 24px;
+  pointer-events: auto;
+  touch-action: none;
+}
+.joystick-label {
+  text-align: center;
+  opacity: 0.45;
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  margin-top: 4px;
+}
+#joystick-move {
+  left: 24px;
+  width: 130px; height: 130px;
+}
+#joystick-look {
+  right: 24px;
+  width: 130px; height: 130px;
+}
+.joystick-bg {
+  position: relative;
+  width: 110px;
+  height: 110px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: rgba(10,14,18,0.45);
+  border: 1px solid rgba(124,246,255,0.25);
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(1px);
+}
+.joystick-knob {
+  width: 50px; height: 50px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,245,138,0.7), rgba(255,245,138,0.1));
+  border: 1px solid rgba(255,245,138,0.7);
+  position: relative;
+  transition: transform 0.05s;
+  box-shadow: 0 0 14px rgba(255,245,138,0.4);
+}
+
+/* =========================================================== LOADER UI */
+
+.screen {
+  position: fixed;
+  inset: 0;
+  display: none;
+  z-index: 50;
+  background: var(--c-void-2);
+}
+.screen.visible { display: block; }
+
+#loader {
+  overflow: hidden;
+}
+
+#binary-rain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+  opacity: 0.45;
+}
+#binary-rain .rain-col {
+  position: absolute;
+  top: -100px;
+  font-family: monospace;
+  font-size: 14px;
+  color: var(--c-console);
+  white-space: nowrap;
+  animation: rain linear infinite;
+  text-shadow: 0 0 6px var(--c-console);
+  will-change: transform;
+}
+@keyframes rain {
+  from { transform: translateY(-20vh); }
+  to   { transform: translateY(120vh); }
+}
+
+.loader-inner {
+  position: relative;
+  z-index: 2;
+  padding: 8vh 6vw;
+  max-width: 720px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.boot-line {
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-align: left;
+  display: block;
+  margin: 4px 0;
+  color: var(--c-console);
+  text-shadow: 0 0 8px rgba(124,246,255,0.5);
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: opacity 0.3s, transform 0.3s;
+}
+.boot-line.show {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.boot-title {
+  margin-top: 60px;
+  font-size: clamp(28px, 5vw, 44px);
+  letter-spacing: 0.4em;
+  font-weight: bold;
+  color: var(--c-acid);
+  text-shadow:
+    0 0 10px var(--c-acid),
+    0 0 30px rgba(255,245,138,0.4);
+  animation: titleGlow 2.4s ease-in-out infinite alternate;
+}
+@keyframes titleGlow {
+  from { text-shadow: 0 0 5px var(--c-acid), 0 0 18px rgba(255,245,138,0.3); }
+  to   { text-shadow: 0 0 16px var(--c-acid), 0 0 46px rgba(255,245,138,0.6); }
+}
+
+.boot-subtitle {
+  margin-top: 14px;
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  opacity: 0.55;
+}
+
+.init-btn {
+  margin-top: 38px;
+  background: transparent;
+  border: 2px solid var(--c-acid);
+  color: var(--c-acid);
+  padding: 16px 32px;
+  font-family: inherit;
+  font-size: 14px;
+  letter-spacing: 0.3em;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.18s;
+  text-shadow: 0 0 8px var(--c-acid);
+  box-shadow: inset 0 0 14px rgba(255,245,138,0.25);
+  font-weight: bold;
+}
+.init-btn:hover {
+  background: var(--c-acid);
+  color: var(--c-void);
+  text-shadow: none;
+  box-shadow: 0 0 24px var(--c-acid);
+}
+.init-btn:active { transform: translateY(1px); }
+
+.boot-warn {
+  margin-top: 24px;
+  font-size: 10px;
+  color: var(--c-warning);
+  opacity: 0.65;
+  letter-spacing: 0.18em;
+}
+
+/* ============================================================== MODAL */
+
+#modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(0,0,0,0.85);
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+#modal.show { display: flex; }
+.modal-inner {
+  background: var(--c-void-2);
+  border: 2px solid var(--c-blood);
+  padding: 36px 32px;
+  text-align: center;
+  max-width: 420px;
+  box-shadow: 0 0 40px rgba(255,0,60,0.4);
+}
+#modal-title {
+  font-size: 28px;
+  letter-spacing: 0.4em;
+  color: var(--c-blood);
+  text-shadow: 0 0 12px var(--c-blood);
+  margin-bottom: 14px;
+}
+#modal-body {
+  font-size: 13px;
+  opacity: 0.8;
+  margin-bottom: 22px;
+  letter-spacing: 0.12em;
+}
+
+/* ========================================================== UTILITIES */
+
+.hidden { display: none !important; }
+.lock { pointer-events: auto !important; }
+
+/* ================================================ RESPONSIVE TWEAKS */
+
+@media (max-width: 720px) {
+  .hud-tl { width: 180px; font-size: 10px; }
+  .hud-tr { width: 175px; }
+  #radar  { width: 165px; height: 165px; }
+  .hud-bc { font-size: 10px; min-width: 0; max-width: 90vw; }
+}
+
+@media (orientation: landscape) and (max-height: 480px) {
+  /* On landscape phones the joysticks already respect the bottom,
+     but the screen-flip changes our coordinate frame. JS handles that. */
+  .hud-tl, .hud-tr {
+    top: 6px;
+    transform: scale(0.85);
+    transform-origin: top;
+  }
+}
+
+/* Respect notches on iOS */
+@supports (padding: max(0px)) {
+  .hud-tl { left: max(14px, env(safe-area-inset-left)); top: max(14px, env(safe-area-inset-top)); }
+  .hud-tr { right: max(14px, env(safe-area-inset-right)); top: max(14px, env(safe-area-inset-top)); }
+  .hud-bc { bottom: max(18px, env(safe-area-inset-bottom)); }
+  #joystick-move { left: max(14px, env(safe-area-inset-left)); bottom: max(14px, env(safe-area-inset-bottom)); }
+  #joystick-look { right: max(14px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); }
+}

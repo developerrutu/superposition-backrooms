@@ -1,0 +1,19 @@
+{
+  "name": "superposition-backrooms",
+  "version": "1.0.0",
+  "description": "Horror game with observer-effect mechanics. Escape a quantum simulation through 10 decaying levels.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "compression": "^1.7.4"
+  },
+  "author": "Arena Agent",
+  "license": "MIT"
+}
