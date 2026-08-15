@@ -462,3 +462,77 @@ html, body {
   #joystick-move { left: max(14px, env(safe-area-inset-left)); bottom: max(14px, env(safe-area-inset-bottom)); }
   #joystick-look { right: max(14px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); }
 }
+
+/* ===================================================== ROTATE GATE */
+/* Shown whenever the viewport is portrait. The game is built around a
+   landscape projection; in portrait the FOV math skews corridors into
+   ugly triangles. This gate blocks entry until the user rotates. */
+#rotate-gate {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(ellipse at center, #0e1018 0%, #050608 80%);
+  z-index: 90;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+  padding: 40px;
+}
+body.is-portrait #rotate-gate { display: flex; }
+body.is-portrait #loader,
+body.is-portrait #hud { display: none !important; }
+
+.rotate-icon-wrap {
+  position: relative;
+  width: 130px;
+  height: 130px;
+  margin-bottom: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rotate-phone {
+  font-size: 96px;
+  filter: drop-shadow(0 0 12px rgba(255,245,138,0.5));
+  animation: phoneSpin 1.8s ease-in-out infinite alternate;
+}
+.rotate-arrow {
+  position: absolute;
+  right: -16px;
+  bottom: -16px;
+  font-size: 36px;
+  color: #fff58a;
+  text-shadow: 0 0 12px rgba(255,245,138,0.7);
+  animation: arrowPulse 1.2s ease-in-out infinite alternate;
+}
+@keyframes phoneSpin {
+  from { transform: rotate(-90deg) scale(0.95); }
+  to   { transform: rotate(0deg)   scale(1.0); }
+}
+@keyframes arrowPulse {
+  from { opacity: 0.4; transform: translateX(0) scale(0.9); }
+  to   { opacity: 1.0; transform: translateX(6px) scale(1.1); }
+}
+
+.rotate-headline {
+  color: #fff58a;
+  font-size: clamp(18px, 4.5vw, 28px);
+  font-weight: bold;
+  letter-spacing: 0.4em;
+  text-shadow: 0 0 12px rgba(255,245,138,0.6);
+  margin-bottom: 14px;
+}
+.rotate-sub {
+  color: #cab97a;
+  font-size: clamp(11px, 3vw, 14px);
+  letter-spacing: 0.2em;
+  opacity: 0.7;
+  margin-bottom: 28px;
+}
+.rotate-footprint {
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  color: #ffae3b;
+  opacity: 0.55;
+}

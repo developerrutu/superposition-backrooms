@@ -1042,6 +1042,38 @@ bootSequence();
 // inside startGame so it was never registered.
 wireInitButton();
 
+// ----------------------- ORIENTATION GATE -----------------------
+// The game is built around a landscape projection. In portrait, the
+// FOV maths skew the corridors into ugly triangles. We gate the page
+// behind a "rotate your device" overlay whenever the viewport is
+// taller than it is wide. CSS does the visual swap; this function
+// just toggles `body.is-portrait` so the rest of the JS knows which
+// mode we're in (used by the resize handler, the boot, and the audio
+// engine — it doesn't try to play 3D audio in portrait because the
+// projection is invalid).
+function updateOrientation() {
+  const landscape =
+    window.matchMedia &&
+    window.matchMedia('(orientation: landscape)').matches;
+  // matchMedia on Android/Chrome is reliable; some browsers ignore it
+  // when in fullscreen, so we also fall back to width-vs-height.
+  const widescreen = window.innerWidth >= window.innerHeight;
+  const isLandscape = landscape || widescreen;
+  document.body.classList.toggle('is-portrait',  !isLandscape);
+  document.body.classList.toggle('is-landscape', isLandscape);
+
+  // Best-effort orientation lock (Chrome / Edge only; Safari/iOS
+  // ignore this — that's fine, the rotate-gate CSS is enough).
+  try {
+    if (screen.orientation && screen.orientation.lock && isLandscape) {
+      screen.orientation.lock('landscape').catch(() => {});
+    }
+  } catch (_) { /* not supported — keep going */ }
+}
+window.addEventListener('orientationchange', updateOrientation);
+window.addEventListener('resize',             updateOrientation);
+updateOrientation();
+
 /* Expose a single bootstrap function on `window` so the inline-onclick in
  * index.html (and any external sweeper) can reach it without going
  * through addEventListener. Belt-and-suspenders: some OPPO / ColorOS

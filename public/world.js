@@ -30,6 +30,13 @@ const TOTAL_TILES = 18;
 const VISIBLE_RADIUS = 4.5; // tiles either side we keep alive
 const FOV_HALF = Math.PI * 0.5; // 90° cone = "observed"
 
+/* Smoothing for the observer-effect reshuffle. Tiles fade in/out instead
+   of hard-popping. Tunable constants. */
+const RESHUFFLE_YAW_THRESHOLD = 0.18;   // ~10° — lower than the old 20°
+const FADE_OUT_DURATION_MS = 600;
+const FADE_IN_DURATION_MS = 350;
+const STALE_DELAY_MS = 80;              // brief grace before fade-out begins
+
 /**
  * Pick a palette for a given level id.
  * Each palette returns colors as plain objects so they're trivial to swap.
@@ -213,7 +220,12 @@ export class World {
       observedFacing: 0,
       stale: false,
       staleTime: 0,
-      removed: false
+      removed: false,
+      // Smoothing state — target opacity is what `update()` lerps toward.
+      opacity: 0.0,         // start invisible; _rebuildTile fades in
+      targetOpacity: 1.0,
+      fadeStartedAt: performance.now(),
+      fadingIn: true,
     };
     this.tiles[i] = tile;
 
@@ -391,10 +403,43 @@ export class World {
     // Update stale-age bookkeeping
     tile.lastUsedFacing = this.lastFacing;
     tile.lastRebuildAt = performance.now();
+
+    // Fade-in: every fresh geometry starts at opacity 0 and ramps to 1
+    // so the player sees a smooth "materialising" effect instead of a
+    // hard pop.
+    tile.opacity = 0.0;
+    tile.targetOpacity = 1.0;
+    tile.fadeStartedAt = performance.now();
+    tile.fadingIn = true;
+    this._applyTileOpacity(tile, 0.0);
+  }
+
+  /** Walk every Mesh in the tile and set material.opacity. We tolerate
+   *  arrays (multi-material meshes) and unique materials per tile. */
+  _applyTileOpacity(tile, opacity) {
+    if (!tile.mesh) return;
+    tile.mesh.traverse(o => {
+      if (!o.material) return;
+      const apply = m => {
+        if (!m) return;
+        m.transparent = true;
+        m.opacity = opacity;
+      };
+      if (Array.isArray(o.material)) o.material.forEach(apply);
+      else apply(o.material);
+    });
   }
 
   _mat(color) {
-    return new THREE.MeshLambertMaterial({ color });
+    // Always start transparent: true so opacity fades work for both
+    // fade-in (after a tile rebuild) and fade-out (when the tile leaves
+    // the player's observation cone).
+    return new THREE.MeshLambertMaterial({
+      color,
+      transparent: true,
+      opacity: 1.0,
+      depthWrite: true,
+    });
   }
 
   /** Spawn the exit portal in this level's chosen tile. */
@@ -483,7 +528,7 @@ export class World {
 
     let maxDelta = 0;
     const yawTravel = Math.abs(angleDiff(this.lastFacing, facing));
-    const isBigTurn = yawTravel > 0.35;       // ~20° — only big motions rebuild.
+    const isBigTurn = yawTravel > RESHUFFLE_YAW_THRESHOLD;
 
     for (const t of this.tiles) {
       if (t.removed) continue;
@@ -505,21 +550,36 @@ export class World {
 
       if (tileDist < VISIBLE_RADIUS * 2 && !inTile) {
         if (Math.abs(rel) < FOV_HALF) {
-          // In observed cone — refresh
+          // Tile is in observed cone — refresh bookkeeping.
           t.observedFacing = facing;
-          // Don't rebuild on every frame — only when the *last observed*
-          // facing of this tile differs significantly from the current one.
-          const traveled = Math.abs(angleDiff(facing, t.observedFacing));
+          // If this tile was stale (was fading out behind us) and the
+          // player turned back, reshuffle it now with a *fresh* RNG hash
+          // so the world really does change.
           if (t.stale && (performance.now() - t.staleTime) > 250 && isBigTurn) {
             this._rebuildTile(t);
             t.stale = false;
             t.observedFacing = facing;
+          } else if (t.targetOpacity < 1) {
+            // Tile is in cone but its opacity is faded — restore it.
+            t.targetOpacity = 1.0;
+            t.fadingIn = true;
+            t.fadeStartedAt = performance.now();
           }
         } else {
-          // Outside cone — mark stale
+          // Tile is OUTSIDE the cone — start fading it out so the
+          // observer effect feels smooth instead of jarring.
           if (!t.stale) {
             t.stale = true;
             t.staleTime = performance.now();
+          }
+          // Begin fade-out after a small grace so jitter doesn't blink.
+          const since = performance.now() - t.staleTime;
+          if (since > STALE_DELAY_MS) {
+            t.targetOpacity = 0.0;
+            t.fadingIn = false;
+            if (!t.fadeStartedAt || t.fadingIn !== false) {
+              t.fadeStartedAt = performance.now();
+            }
           }
         }
       }
@@ -546,6 +606,25 @@ export class World {
     if (this.exitPanel) {
       const t = performance.now() * 0.003;
       this.exitPanel.material.opacity = 0.5 + 0.4 * (0.5 + 0.5 * Math.sin(t));
+    }
+
+    // Smooth tile fade-in / fade-out for the observer-effect reshuffle.
+    // Each tile's `opacity` lerps toward its `targetOpacity` over the
+    // duration appropriate to its direction of motion.
+    const now = performance.now();
+    for (const t of this.tiles) {
+      if (t.removed) continue;
+      const duration = t.fadingIn ? FADE_IN_DURATION_MS : FADE_OUT_DURATION_MS;
+      const elapsed = now - (t.fadeStartedAt || now);
+      const u = Math.max(0, Math.min(1, elapsed / Math.max(1, duration)));
+      const eased = u * u * (3 - 2 * u);  // smoothstep — eases both ends
+      const from = t.fadingIn ? 0.0 : 1.0;
+      const to   = t.fadingIn ? 1.0 : 0.0;
+      const desired = from + (to - from) * eased;
+      // Avoid fighting the lerp on every frame when very close to target
+      if (Math.abs(desired - t.opacity) < 0.005) continue;
+      t.opacity = desired;
+      this._applyTileOpacity(t, desired);
     }
   }
 

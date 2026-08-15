@@ -15,7 +15,7 @@
   <meta http-equiv="expires" content="0">
 
   <title>SUPERPOSITION BACKROOMS</title>
-  <link rel="stylesheet" href="/style.css?v=5">
+  <link rel="stylesheet" href="/style.css?v=6">
 
   <!-- Load Three.js from a VENDORED local copy. Bundling into the repo
        guarantees the game works on any device, regardless of whether the
@@ -152,7 +152,21 @@
     </div>
   </div>
 
+  <!-- ============ ROTATE-DEVICE GATE ============ -->
+  <!-- Shown whenever the viewport is in portrait mode. The game itself
+       assumes a landscape projection matrix; running in portrait skews
+       the FOV badly. We replace the loader with this gate instead. -->
+  <div id="rotate-gate" class="hidden">
+    <div class="rotate-icon-wrap">
+      <div class="rotate-phone">📱</div>
+      <div class="rotate-arrow">↻</div>
+    </div>
+    <div class="rotate-headline">ROTATE TO LANDSCAPE</div>
+    <div class="rotate-sub">This simulation runs in landscape orientation only.</div>
+    <div class="rotate-footprint">AUDIO WARNING: headphones recommended.</div>
+  </div>
+
   <!-- The game script (ES module). Loads Three from CDN via importmap. -->
-  <script type="module" src="/game.js?v=5"></script>
+  <script type="module" src="/game.js?v=6"></script>
 </body>
 </html>
