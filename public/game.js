@@ -1043,6 +1043,25 @@ bootSequence();
 // inside startGame so it was never registered.
 wireInitButton();
 
+/* Expose a single bootstrap function on `window` so the inline-onclick in
+ * index.html (and any external sweeper) can reach it without going
+ * through addEventListener. Belt-and-suspenders: some OPPO / ColorOS
+ * Chromium builds ship with quirky event-delivery timing and we want
+ * the button to fire through *any* path. */
+window.__sbStart = startGame;
+
+/* If the user tapped the button before this module finished evaluating
+ * (rare but possible on slow network), the inline handler stamps the
+ * button with the `pending` class. Flush it now that the module is up. */
+document.addEventListener('DOMContentLoaded', () => {
+  if (dom && dom.initBtn && dom.initBtn.classList &&
+      dom.initBtn.classList.contains('pending') &&
+      window.__sbStart) {
+    dom.initBtn.classList.remove('pending');
+    window.__sbStart();
+  }
+});
+
 // ----------------------- last: initial setup that runs at import time
 
 // Audio is created only after a user gesture (see AudioEngine.init() call in

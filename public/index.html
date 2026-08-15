@@ -6,8 +6,16 @@
   <meta name="theme-color" content="#000000">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
+
+  <!-- Force every phone browser to revalidate on every load. OPPO/ColorOS
+       in particular caches aggressively; this is the belt-and-suspenders
+       on top of server-side Cache-Control headers. -->
+  <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="pragma" content="no-cache">
+  <meta http-equiv="expires" content="0">
+
   <title>SUPERPOSITION BACKROOMS</title>
-  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/style.css?v=4">
 
   <!-- Load Three.js from a VENDORED local copy. Bundling into the repo
        guarantees the game works on any device, regardless of whether the
@@ -41,7 +49,13 @@
       <div class="boot-line" id="boot-5">SIMULATION BOUNDARY............. FRAGILE</div>
       <div class="boot-title">SUPERPOSITION BACKROOMS</div>
       <div class="boot-subtitle">// a packet trying to escape its own observation //</div>
-      <button id="init-btn" class="init-btn" type="button">
+      <!-- Inline onclick is browser-native — fires even before any JS event
+           listener can register, even with strict/aggressive WebView cache.
+           The external wireInitButton() will attach `event` listeners too,
+           but this gives us a guarantee. Pointer-events is also explicitly
+           forced in JS as a belt-and-suspenders. -->
+      <button id="init-btn" class="init-btn" type="button"
+              onclick="if(window.__sbStart){window.__sbStart();}else{this.classList.add('pending');}">
         INITIALIZE SIMULATION
       </button>
       <div class="boot-warn">▶ Audio is critical. Tap above BEFORE headphones or speakers are required.</div>
@@ -139,6 +153,6 @@
   </div>
 
   <!-- The game script (ES module). Loads Three from CDN via importmap. -->
-  <script type="module" src="/game.js"></script>
+  <script type="module" src="/game.js?v=4"></script>
 </body>
 </html>
