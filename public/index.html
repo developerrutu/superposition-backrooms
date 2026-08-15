@@ -9,12 +9,14 @@
   <title>SUPERPOSITION BACKROOMS</title>
   <link rel="stylesheet" href="/style.css">
 
-  <!-- Load Three.js from a pinned CDN. Importmap lets us write
+  <!-- Load Three.js from a VENDORED local copy. Bundling into the repo
+       guarantees the game works on any device, regardless of whether the
+       deployment network can reach a CDN. Importmap lets us write
        "import * as THREE from 'three'" in our module script. -->
   <script type="importmap">
   {
     "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/[email protected]/build/three.module.js"
+      "three": "/vendor/three/three.module.js"
     }
   }
   </script>

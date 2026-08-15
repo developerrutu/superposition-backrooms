@@ -60,7 +60,7 @@ const dom = {
   lookKnob:  document.querySelector('#joystick-look .joystick-knob'),
   radar:     document.getElementById('radar'),
   radarWalls:    document.getElementById('radar-walls'),
-  radarMonsters: document.getElementById('radar-monsters'),
+  radarMonsters: document.getElementById('rader-monsters'),
   radarExit:     document.getElementById('radar-exit'),
   radarWorld:    document.getElementById('radar-world'),
   radarFwd:      document.getElementById('radar-fwd'),
@@ -68,6 +68,50 @@ const dom = {
   fade:      document.getElementById('fade-overlay'),
   vignette:  document.getElementById('vignette'),
 };
+
+/* Surface fatal boot errors directly into the loader screen so the user
+ * sees *something* even when a module fails to load on their network.   */
+window.addEventListener('error', e => {
+  if (!e || !e.message) return;
+  showBootError(e.message, e.filename);
+});
+window.addEventListener('unhandledrejection', e => {
+  if (!e || !e.reason) return;
+  showBootError(String(e.reason && e.reason.message || e.reason), '');
+});
+
+function showBootError(message, where) {
+  // Don't double-display.
+  if (document.getElementById('boot-error')) return;
+  const box = document.createElement('div');
+  box.id = 'boot-error';
+  box.style.cssText = `
+    position: fixed; inset: 8vh 6vw; z-index: 60;
+    background: rgba(255,0,60,0.12);
+    border: 1px solid #ff003c;
+    color: #ffb3c0; font-size: 12px; padding: 16px;
+    text-align: left; line-height: 1.5;
+    border-radius: 4px; box-shadow: 0 0 20px rgba(255,0,60,0.3);
+  `;
+  box.innerHTML = `
+    <div style="color:#ff003c; font-weight:bold; letter-spacing:0.2em; font-size:13px;">
+      SIMULATION FAILED TO LOAD
+    </div>
+    <pre style="white-space:pre-wrap; margin-top:8px;">${escapeHtml(message)}</pre>
+    ${where ? `<div style="opacity:0.6; margin-top:6px; font-size:10px;">at ${escapeHtml(where)}</div>` : ''}
+    <div style="opacity:0.65; margin-top:10px; font-size:11px;">
+      Tap your browser's refresh button. If this persists, your browser may be
+      blocking module imports — try a different network or browser.
+    </div>
+  `;
+  document.body.appendChild(box);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
 
 // ============================================================ Globals
 

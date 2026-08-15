@@ -14,6 +14,10 @@ npm start
 Then open `http://localhost:3000`. Click **Initialize Simulation** (this also
 unlocks the Web Audio context and requests full-screen).
 
+> **No external CDNs are required.** Three.js is vendored at
+> `public/vendor/three/three.module.js` (~1.27 MB) so the game runs even when
+> the deployment network can't reach `cdn.jsdelivr.net`.
+
 ## Controls
 
 | Action    | PC                                | Mobile                       |
