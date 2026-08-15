@@ -148,35 +148,86 @@ function bootSequence() {
 
 /* Wiring the init button has to happen *outside* startGame — that's
  * the deadlock bug from v1: setupUIHooks lived inside startGame so the
- * click handler was never registered. We attach both 'click' AND
- * 'pointerup' so we work on every browser (some mobile WebViews
- * suppress synthetic click events under gestures). */
+ * click handler was never registered. We attach FOUR redundant listeners
+ * (pointerdown, touchend, mousedown, click) plus a "tap-anywhere-on-loader"
+ * fallback. We've already lost too much time to silent mobile-webkit
+ * quirks; shotgun coverage is the move.
+ */
 function wireInitButton() {
-  if (!dom.initBtn) return;
+  if (!dom.initBtn) {
+    showBootError('init-btn element missing in DOM', 'index.html');
+    return;
+  }
+  // Ensure the button actually catches clicks on every browser/engine.
+  dom.initBtn.style.pointerEvents = 'auto';
+  dom.initBtn.style.touchAction   = 'manipulation';
+  // iOS sometimes fires 300 ms delayed clicks unless this is set.
+  dom.initBtn.style.userSelect    = 'none';
 
-  let inverted = false;
-  const flipInverted = () => { inverted = true; };
+  /** Single funnel for any tap-or-click event. Wrapped in try/catch so
+   *  any *future* error from inside startGame paints a red card on the
+   *  loader immediately instead of silently killing the click. */
+  const onTap = (ev) => {
+    try {
+      bumpTapDebug(evt_name(ev));
+      if (gameState === 'play') return;
+      if (ev && ev.preventDefault) ev.preventDefault();
+      // Always show immediate visual confirmation the tap registered —
+      // even if the rest of the boot hangs (fullscreen prompt, etc.)
+      dom.initBtn.textContent = 'SPINNING UP…';
+      startGame().catch(err => {
+        showBootError(String((err && err.message) || err), '');
+      });
+    } catch (e) {
+      // NEVER swallow — that was the silence that hid the _gameState bug.
+      showBootError('Tap handler error: ' + (e && e.message || e), '');
+    }
+  };
 
-  // Visual feedback the moment the user releases — no waiting on
-  // browser's 300 ms synthetic-click delay.
-  dom.initBtn.addEventListener('pointerup', e => {
-    if (inverted) return;
-    flipInverted();
-    startGame().catch(err => {
-      showBootError(String(err && err.message || err), '');
-    });
-  });
+  // Four redundant event types — covers every reasonable browser.
+  dom.initBtn.addEventListener('pointerdown', onTap);
+  dom.initBtn.addEventListener('touchend', onTap, { passive: false });
+  dom.initBtn.addEventListener('mousedown', onTap);
+  dom.initBtn.addEventListener('click', onTap);
 
-  // Synthesis fallback (older WebViews)
-  dom.initBtn.addEventListener('click', e => {
-    if (inverted) return;
-    flipInverted();
-    // If pointerup already fired we just return here.
-    if (gameState === 'play') return;
-    startGame().catch(err => {
-      showBootError(String(err && err.message || err), '');
-    });
-  });
+  // LAST-RESORT fallback: tap *anywhere* on the loader screen to start.
+  // Many devices will block button-specific events while panning is
+  // starting/finishing; this catches the common case.
+  if (dom.loader) {
+    dom.loader.addEventListener('click', onTap);
+    dom.loader.addEventListener('touchend', onTap, { passive: false });
+  }
+}
+
+function evt_name(e) {
+  return (e && e.type) || 'event';
+}
+
+/* On-screen tap counter so we can SEE whether any event reached us.
+   In production this is off; flip SHOW_TAP_DEBUG to true via the URL
+   `?debug=1` param so it doesn't pollute normal play. */
+const SHOW_TAP_DEBUG = /[?&]debug=1\b/.test(location.href);
+let _tapCount = 0;
+const _tapDot = document.createElement('div');
+_tapDot.style.cssText = `
+  position: fixed; top: 8px; left: 50%; transform: translateX(-50%);
+  width: 12px; height: 12px; border-radius: 50%;
+  background: rgba(255,0,60,0.85);
+  z-index: 99; pointer-events: none;
+  box-shadow: 0 0 8px rgba(255,0,60,0.8);
+  transition: opacity 0.6s;
+  display: none;
+`;
+document.body.appendChild(_tapDot);
+
+function bumpTapDebug(name) {
+  if (!SHOW_TAP_DEBUG) return;
+  _tapCount++;
+  _tapDot.style.display = 'block';
+  _tapDot.style.opacity = '1';
+  _tapDot.title = `tap #${_tapCount} via ${name}`;
+  console.log(`[TAP] #${_tapCount} via ${name}`);
+  setTimeout(() => { _tapDot.style.opacity = '0.05'; }, 600);
 }
 
 let _startInFlight = false;
