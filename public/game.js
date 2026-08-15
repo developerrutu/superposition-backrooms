@@ -60,7 +60,7 @@ const dom = {
   lookKnob:  document.querySelector('#joystick-look .joystick-knob'),
   radar:     document.getElementById('radar'),
   radarWalls:    document.getElementById('radar-walls'),
-  radarMonsters: document.getElementById('rader-monsters'),
+  radarMonsters: document.getElementById('radar-monsters'),
   radarExit:     document.getElementById('radar-exit'),
   radarWorld:    document.getElementById('radar-world'),
   radarFwd:      document.getElementById('radar-fwd'),
@@ -146,34 +146,100 @@ function bootSequence() {
   });
 }
 
+/* Wiring the init button has to happen *outside* startGame — that's
+ * the deadlock bug from v1: setupUIHooks lived inside startGame so the
+ * click handler was never registered. We attach both 'click' AND
+ * 'pointerup' so we work on every browser (some mobile WebViews
+ * suppress synthetic click events under gestures). */
+function wireInitButton() {
+  if (!dom.initBtn) return;
+
+  let inverted = false;
+  const flipInverted = () => { inverted = true; };
+
+  // Visual feedback the moment the user releases — no waiting on
+  // browser's 300 ms synthetic-click delay.
+  dom.initBtn.addEventListener('pointerup', e => {
+    if (inverted) return;
+    flipInverted();
+    startGame().catch(err => {
+      showBootError(String(err && err.message || err), '');
+    });
+  });
+
+  // Synthesis fallback (older WebViews)
+  dom.initBtn.addEventListener('click', e => {
+    if (inverted) return;
+    flipInverted();
+    // If pointerup already fired we just return here.
+    if (gameState === 'play') return;
+    startGame().catch(err => {
+      showBootError(String(err && err.message || err), '');
+    });
+  });
+}
+
+let _startInFlight = false;
 async function startGame() {
-  // Hide loader, fullscreen, instantiate everything.
+  if (_startInFlight) return; // double-tap guard
+  _startInFlight = true;
+  try {
+    return await _startGame();
+  } finally {
+    _startInFlight = false;
+  }
+}
+
+async function _startGame() {
+  // First sync steps: kill the loader so the player gets *immediate*
+  // feedback that the tap registered, BEFORE any async work (fullscreen,
+  // audio, etc.). This is what makes a tap feel responsive.
   gameState = 'play';
   dom.loader.classList.remove('visible');
   dom.hud.classList.remove('hidden');
+  dom.initBtn.disabled = true;
+  dom.initBtn.textContent = 'SPINNING UP...';
 
-  // The audio *must* be initiated from the click handler — modern browsers
-  // refuse to open an AudioContext anywhere else.
-  audio = new AudioEngine();
-  audio.init();
-  audio.unlock();
-
-  // Request full-screen.
-  if (dom.canvas.requestFullscreen) {
-    try { await dom.canvas.requestFullscreen({ navigationUI: 'hide' }); } catch (e) {}
+  // The audio context *must* be initiated from a user gesture context —
+  // modern browsers refuse to open one anywhere else.
+  try {
+    audio = new AudioEngine();
+    audio.init();
+    audio.unlock();
+  } catch (audioErr) {
+    // Audio failing shouldn't block the game from booting — it just
+    // means we'll be silent. We log it into the boot error so the user
+    // sees it if they need to debug.
+    showBootError('Audio subsystem failed to start: ' + audioErr.message, 'audio.js');
   }
 
-  // Initialize Three.js.
-  setupRenderer();
-  setupScene();
-  setupWorld();
-  monsters = new MonsterManager(scene);
-  setupPlayer();
-  setupPointerLock();
-  setupInput();
-  setupUIHooks();
-  applyLevel(0);
-  audio.startAmbient(LEVELS[0].id);
+  // Request full-screen. Try both the modern + prefixed API. Don't let
+  // any rejection here abort boot — the game works fine windowed.
+  try {
+    if (dom.canvas.requestFullscreen) {
+      await dom.canvas.requestFullscreen({ navigationUI: 'hide' });
+    } else if (dom.canvas.webkitRequestFullscreen) {
+      dom.canvas.webkitRequestFullscreen();
+    }
+  } catch (_) { /* fullscreen is a nice-to-have */ }
+
+  // Initialize Three.js (these may throw on ancient devices).
+  try {
+    setupRenderer();
+    setupScene();
+    setupWorld();
+    monsters = new MonsterManager(scene);
+    setupPlayer();
+    setupPointerLock();
+    setupInput();
+    setupUIHooks();
+    applyLevel(0);
+    audio.startAmbient(LEVELS[0].id);
+  } catch (bootErr) {
+    showBootError('Boot failed: ' + (bootErr.message || bootErr),
+                  (bootErr && bootErr.filename) || 'game.js');
+    throw bootErr;
+  }
 
   // Begin the loop.
   raf.start();
@@ -181,7 +247,10 @@ async function startGame() {
   lastMovedAt = performance.now();
   dom.statusT.textContent = LEVELS[0].prompt;
   dom.subtitle.textContent = LEVELS[0].sub;
-  audio.playWhisper();
+  if (audio && audio.playWhisper) audio.playWhisper();
+
+  dom.initBtn.textContent = 'INITIALIZE SIMULATION'; // reset label
+  dom.initBtn.disabled = false;
 }
 
 // =========================================================== RENDERER
@@ -352,7 +421,9 @@ function attachGlobalTouchListeners() {
 }
 
 function setupUIHooks() {
-  dom.initBtn.addEventListener('click', startGame);
+  // initBtn is already wired at module load time by wireInitButton().
+  // Re-registering here would create a duplicate handler — guarded by
+  // _startInFlight but wasteful. We only handle the in-game buttons here.
   dom.modalBtn.addEventListener('click', () => {
     dom.modal.classList.remove('show');
     gameState = 'play';
@@ -915,6 +986,11 @@ function showModal(title, body) {
 
 // Show the boot UI
 bootSequence();
+
+// Wire the init button at module load so it's tappable *before* any game
+// state exists. This was the v1 deadlock bug — the click handler lived
+// inside startGame so it was never registered.
+wireInitButton();
 
 // ----------------------- last: initial setup that runs at import time
 
