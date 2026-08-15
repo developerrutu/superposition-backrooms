@@ -491,10 +491,41 @@ function setupUIHooks() {
   window.addEventListener('orientationchange', onResize);
 }
 function onResize() {
-  renderer.setSize(window.innerWidth, window.innerHeight, false);
-  camera.aspect = window.innerWidth / window.innerHeight;
+  // The canvas is sized via CSS (100vw / 100vh). We just need to keep the
+  // GL drawing buffer in sync. `false` = don't touch the CSS box — let
+  // the stylesheet drive layout. We also re-derive the camera aspect so
+  // the projection matrix doesn't squash a portrait viewport into a
+  // landscape-projection triangle.
+  if (!renderer || !camera) return;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  // FOV compensation: when the viewport is unusually wide or tall, scale
+  // the FOV down so the player's view doesn't feel like a fish-eye.
+  const baseAspect = 16 / 9;
+  const aspectDelta = Math.abs(camera.aspect - baseAspect);
+  if (aspectDelta > 0.4) {
+    const targetFov = 72 * Math.min(1.0, baseAspect / camera.aspect + 0.2);
+    camera.fov = targetFov;
+  } else {
+    camera.fov = 72;
+  }
   camera.updateProjectionMatrix();
 }
+
+/* Fullscreen entry/exit on Android Chrome doesn't always fire a window
+   resize event — the viewport dimensions change but no resize event gets
+   emitted in some browser forks. Listen to fullscreenchange explicitly
+   so the renderer picks up the new viewport size. */
+function onFullscreenChange() {
+  // Slight delay — the browser may not have settled dimensions yet.
+  setTimeout(onResize, 60);
+}
+document.addEventListener('fullscreenchange',       onFullscreenChange);
+document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+document.addEventListener('mozfullscreenchange',    onFullscreenChange);
+document.addEventListener('MSFullscreenChange',     onFullscreenChange);
 
 // ====================================================== LEVEL FLOW
 

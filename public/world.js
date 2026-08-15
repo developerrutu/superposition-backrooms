@@ -290,9 +290,19 @@ export class World {
     tile.mesh.add(ceil);
 
     // ----- Walls (a wall is a 4m × 4m × 0.2m slab on the boundary) -----
+    // The CRITICAL geometry: tile N's back wall is at z = center+2; tile
+    // N-1's front wall is at z = center-2. For every adjacent pair those
+    // two walls share the same world position. If we render BOTH, the
+    // corridor gets a doubled wall AND a randomly-closed back wall can
+    // slam shut across the doorway that the previous tile's front wall
+    // promised to leave open. So for tiles index > 0 we skip the back
+    // wall entirely — the previous tile's front wall IS the dividing
+    // wall. Tile 0 keeps its back wall so the spawn has a backstop.
     const wallWalls = [
       { side: 'front', open: openFront, x: 0, z: -TILE_SIZE / 2, ry: 0 },
-      { side: 'back',  open: openBack,  x: 0, z:  TILE_SIZE / 2, ry: Math.PI },
+      ...(tile.index === 0
+        ? [{ side: 'back', open: openBack, x: 0, z: TILE_SIZE / 2, ry: Math.PI }]
+        : []),
       { side: 'left',  open: openLeft,  x: -TILE_SIZE / 2, z: 0, ry:  Math.PI / 2 },
       { side: 'right', open: openRight, x:  TILE_SIZE / 2, z: 0, ry: -Math.PI / 2 },
     ];
