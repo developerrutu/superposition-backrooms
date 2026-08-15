@@ -757,7 +757,6 @@ function updateMonster(dt, now) {
 // ---------------------------------------------- sanity, stability, levels
 
 function updateMood(dt, now) {
-  runTimerSec = (now - runStart) / 1000;
   document.getElementById('level-readout').textContent =
     String(typeof LEVELS[levelIndex].id === 'number'
       ? LEVELS[levelIndex].id
